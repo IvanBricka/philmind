@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Nouveautés · Philosophie de l'esprit</title>
+  <meta name="description" content="Nouveaux articles et livres en philosophie de l'esprit, d'après PhilPapers.">
+  <meta name="theme-color" content="#1f3a34">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>Philosophie de l'esprit</h1>
+      <p class="sub" id="subtitle">Nouveautés PhilPapers</p>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" id="syncBtn" title="Synchroniser" aria-label="Synchroniser">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.7M20 4v4.7h-4.7M20 12a8 8 0 0 1-13.7 5.6L4 15.3M4 20v-4.7h4.7"/></svg>
+        <span class="dot" id="syncDot"></span>
+      </button>
+      <button class="icon-btn" id="settingsBtn" title="Réglages" aria-label="Réglages">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav class="lang-tabs" role="tablist" aria-label="Langue">
+    <button role="tab" data-lang="fr">Français <span class="n"></span></button>
+    <button role="tab" data-lang="en">Anglais <span class="n"></span></button>
+    <button role="tab" data-lang="other">Autres langues <span class="n"></span></button>
+  </nav>
+
+  <div class="filters">
+    <div class="chips" id="typeChips" aria-label="Type">
+      <button data-type="all">Tout <span class="n"></span></button>
+      <button data-type="article">Articles <span class="n"></span></button>
+      <button data-type="livre">Livres <span class="n"></span></button>
+      <button data-type="autre">Autres <span class="n"></span></button>
+    </div>
+    <div class="row">
+      <select id="period" aria-label="Période">
+        <option value="1">Dernier jour</option>
+        <option value="7" selected>7 derniers jours</option>
+        <option value="30">30 derniers jours</option>
+        <option value="0">Tout l'historique</option>
+      </select>
+      <select id="status" aria-label="Statut">
+        <option value="unread" selected>Non lus</option>
+        <option value="later">À lire plus tard</option>
+        <option value="read">Lus</option>
+        <option value="all">Tous</option>
+      </select>
+    </div>
+  </div>
+
+  <main id="list" aria-live="polite"></main>
+
+  <dialog id="settings">
+    <form method="dialog" class="settings-form">
+      <h2>Synchronisation</h2>
+      <p class="help">Vos marques « lu » et « à lire plus tard » sont enregistrées dans un dépôt GitHub privé,
+        ce qui les synchronise entre l'ordinateur et le téléphone. Saisissez les mêmes réglages sur chaque appareil.</p>
+      <label>Propriétaire (votre identifiant GitHub)<input name="owner" autocomplete="off" spellcheck="false"></label>
+      <label>Dépôt privé de synchronisation<input name="repo" placeholder="philmind-sync" autocomplete="off" spellcheck="false"></label>
+      <label>Jeton d'accès (fine-grained, accès « Contents : Read and write » à ce seul dépôt)
+        <input name="token" type="password" autocomplete="off" spellcheck="false"></label>
+      <p class="help">Le jeton reste sur cet appareil et n'est envoyé qu'à api.github.com.</p>
+      <div class="dialog-actions">
+        <button value="cancel" formnovalidate class="ghost">Annuler</button>
+        <button value="save" class="primary">Enregistrer</button>
+      </div>
+      <hr>
+      <p class="help" id="syncInfo"></p>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>

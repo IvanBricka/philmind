@@ -5,13 +5,16 @@ Application (PWA) qui affiche chaque jour les nouveautés PhilPapers de la caté
 
 - trois onglets de langue : **Français / Anglais / Autres langues** ;
 - un filtre de type : **Articles / Livres / Autres** (chapitres, thèses, manuscrits, prépublications…) ;
+- des filtres **Auteur** et **Publication** (revue, livre collectif ou éditeur), avec suggestions ;
+  un clic sur un auteur ou une revue dans une fiche applique le filtre ;
+- un historique d'**un an** (chargé mois par mois, seulement quand on en a besoin) ;
 - des marques **lu** et **à lire plus tard**, synchronisées entre le PC et le téléphone.
 
 ## Fonctionnement
 
 | Élément | Rôle |
 |---|---|
-| `collector/collect.py` | Récupère les ~500 derniers ajouts de la catégorie (JSON + BibTeX publics de PhilPapers), détecte la langue, écrit `docs/data/items.json` (120 jours d'historique). |
+| `collector/collect.py` | Récupère les ajouts récents de la catégorie (JSON + BibTeX publics de PhilPapers), écarte les anciens textes simplement reclassés, détecte la langue, écrit `docs/data/index.json` et un fichier `items-AAAA-MM.json` par mois (≈ 380 jours). `--backfill 365` reconstitue toute l'année. |
 | `.github/workflows/collect.yml` | Lance la collecte chaque matin sur GitHub et publie le résultat. |
 | `docs/` | L'application, servie par GitHub Pages. |
 | Dépôt privé `philmind-sync` | Contient `state.json` : vos marques lu / à lire. |

@@ -41,12 +41,27 @@
       <button data-type="livre">Livres <span class="n"></span></button>
       <button data-type="autre">Autres <span class="n"></span></button>
     </div>
+    <div class="row search">
+      <label class="field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+        <input id="author" type="search" list="authorList" placeholder="Auteur" aria-label="Filtrer par auteur" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5z"/><path d="M4 19a2 2 0 0 1 2-2h12"/></svg>
+        <input id="venue" type="search" list="venueList" placeholder="Revue, éditeur…" aria-label="Filtrer par publication" autocomplete="off" spellcheck="false">
+      </label>
+      <button type="button" class="clear" id="clearFilters" hidden title="Effacer les filtres auteur et publication">Effacer</button>
+      <datalist id="authorList"></datalist>
+      <datalist id="venueList"></datalist>
+    </div>
     <div class="row">
       <select id="period" aria-label="Période">
         <option value="1">Dernier jour</option>
         <option value="7" selected>7 derniers jours</option>
         <option value="30">30 derniers jours</option>
-        <option value="0">Tout l'historique</option>
+        <option value="90">3 derniers mois</option>
+        <option value="180">6 derniers mois</option>
+        <option value="365">Depuis 1 an</option>
       </select>
       <select id="status" aria-label="Statut">
         <option value="unread" selected>Non lus</option>

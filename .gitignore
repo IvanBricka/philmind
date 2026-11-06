@@ -2,3 +2,9 @@
 __pycache__/
 *.pyc
 .claude/
+
+# Secrets locaux (jetons) : ne jamais publier
+token.txt
+*.token
+*secret*
+.env

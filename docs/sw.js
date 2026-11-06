@@ -1,5 +1,5 @@
 // Service worker : appli utilisable hors ligne, données rafraîchies dès que possible.
-const VERSION = "v1";
+const VERSION = "v3";
 const SHELL = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -18,7 +18,7 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET" || url.origin !== location.origin) return; // API GitHub : jamais en cache
   // Réseau d'abord (pour avoir les nouveautés et la dernière version), cache en secours.
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: "no-cache" }) // revalide auprès du serveur (réponse 304 légère si inchangé)
       .then((r) => {
         if (r.ok) { const copy = r.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
         return r;

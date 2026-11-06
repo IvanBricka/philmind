@@ -15,7 +15,7 @@ if (-not (Test-Path ".venv")) {
 
 git pull --quiet --rebase
 .\.venv\Scripts\python collector\collect.py
-git add docs/data/items.json
+git add -A docs/data
 git diff --cached --quiet
 if ($LASTEXITCODE -ne 0) {
     git commit -m "Nouveautés du $(Get-Date -Format yyyy-MM-dd) (collecte locale)"

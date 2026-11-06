@@ -1,5 +1,6 @@
 /* Nouveautés PhilPapers — philosophie de l'esprit
- * Données : data/items.json (généré chaque jour par collector/collect.py)
+ * Données : data/index.json + data/items-AAAA-MM.json (générés chaque jour par collector/collect.py),
+ *           chargés mois par mois selon la période affichée.
  * Marques lu / à lire : localStorage + synchronisation optionnelle via un dépôt GitHub privé.
  */
 (() => {
@@ -14,10 +15,13 @@
 
   const PAGE = 60;
   const ui = Object.assign(
-    { lang: "fr", type: "all", period: "7", status: "unread" },
+    { lang: "fr", type: "all", period: "7", status: "unread", author: "", venue: "" },
     store.get("ui", {})
   );
+  if (ui.period === "0") ui.period = "365";
   let items = [];
+  let months = [];          // [{month, count, file, last}] — plus récent d'abord
+  const loaded = new Map(); // mois -> items
   let generated = "";
   let shown = PAGE;
   // marks[id] = { r: 0|1, l: 0|1, t: horodatage ms }
@@ -25,19 +29,58 @@
   let dirty = store.get("dirty", false);
 
   // ---------- Données ----------
-  async function loadItems() {
+  async function getJSON(url) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const r = await fetch("data/items.json", { cache: attempt ? "default" : "no-cache" });
+        const r = await fetch(url, { cache: attempt ? "default" : "no-cache" });
         if (!r.ok) throw new Error(r.status);
-        const j = await r.json();
-        items = j.items || [];
-        generated = j.generated || "";
-        return;
+        return await r.json();
       } catch { /* nouvelle tentative */ }
     }
-    // On garde les données déjà affichées le cas échéant.
-    if (!items.length) toast("Impossible de charger les nouveautés (hors ligne ?)");
+    throw new Error("échec " + url);
+  }
+
+  async function loadIndex() {
+    try {
+      const j = await getJSON("data/index.json");
+      const changed = j.generated !== generated;
+      months = j.months || [];
+      generated = j.generated || "";
+      if (changed) { loaded.clear(); items = []; }
+      return changed;
+    } catch {
+      if (!months.length) toast("Impossible de charger les nouveautés (hors ligne ?)");
+      return false;
+    }
+  }
+
+  /** Mois nécessaires pour l'affichage courant. */
+  function neededMonths() {
+    // « À lire plus tard » et « Lus » : on cherche dans tout l'historique.
+    if (ui.status === "later" || ui.status === "read") return months.map((m) => m.month);
+    const c = cutoff();
+    return months.filter((m) => !c || m.month >= c.slice(0, 7)).map((m) => m.month);
+  }
+
+  let loadingP = null;
+  async function ensureLoaded() {
+    const missing = neededMonths().filter((m) => !loaded.has(m));
+    if (!missing.length) return;
+    if (missing.length > 1) $("#list").innerHTML = `<div class="empty"><strong>Chargement de l'historique…</strong>${missing.length} mois</div>`;
+    loadingP = Promise.all(missing.map(async (m) => {
+      const meta = months.find((x) => x.month === m);
+      try { loaded.set(m, (await getJSON("data/" + meta.file)).items || []); }
+      catch { toast("Mois " + m + " indisponible (hors ligne ?)"); }
+    }));
+    await loadingP;
+    items = [...loaded.values()].flat().sort((a, b) => (a.added < b.added ? 1 : a.added > b.added ? -1 : 0));
+    authorIndex = venueIndex = null;
+  }
+
+  async function refresh() {
+    await loadIndex();
+    await ensureLoaded();
+    render();
   }
 
   const isRead = (id) => !!(marks[id] && marks[id].r);
@@ -45,7 +88,7 @@
   const langGroup = (it) => (it.lang === "fr" ? "fr" : it.lang === "en" ? "en" : "other");
 
   function latestDate() {
-    return items.reduce((m, it) => (it.added > m ? it.added : m), "");
+    return (months[0] && months[0].last) || items.reduce((m, it) => (it.added > m ? it.added : m), "");
   }
   function cutoff() {
     const n = Number(ui.period);
@@ -57,8 +100,38 @@
     return d.toISOString().slice(0, 10);
   }
 
+  // ---------- Auteurs et publications ----------
+  const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  const displayAuthor = (a) => { const [last, first] = a.split(/,\s*/); return first ? `${first} ${last}` : a; };
+  let authorIndex = null, venueIndex = null;
+  function buildIndexes() {
+    if (authorIndex) return;
+    const ac = new Map(), vc = new Map();
+    for (const it of items) {
+      it._a ??= (it.authors || []).map((a) => norm(displayAuthor(a)) + " | " + norm(a)).join(" || ");
+      it._v ??= norm(it.venue) + " | " + norm(it.pub);
+      for (const a of it.authors || []) { const d = displayAuthor(a); ac.set(d, (ac.get(d) || 0) + 1); }
+      if (it.venue) vc.set(it.venue, (vc.get(it.venue) || 0) + 1);
+    }
+    authorIndex = [...ac].sort((a, b) => b[1] - a[1]);
+    venueIndex = [...vc].sort((a, b) => b[1] - a[1]);
+  }
+  function suggest(listEl, kind, q) {
+    buildIndexes();
+    const index = kind === "author" ? authorIndex : venueIndex;
+    const nq = norm(q);
+    const out = [];
+    for (const [name, n] of index) {
+      if (!nq || norm(name).includes(nq)) out.push(`<option value="${esc(name)}">${n} titre${n > 1 ? "s" : ""}</option>`);
+      if (out.length >= 40) break;
+    }
+    listEl.innerHTML = out.join("");
+  }
+
   function matches(it, { lang = ui.lang, type = ui.type } = {}, c = cutoff()) {
-    if (c && it.added < c && ui.status !== "later") return false;
+    if (c && it.added < c && ui.status !== "later" && ui.status !== "read") return false;
+    if (ui.author && !it._a.includes(norm(ui.author))) return false;
+    if (ui.venue && !it._v.includes(norm(ui.venue))) return false;
     if (ui.status === "unread" && isRead(it.id)) return false;
     if (ui.status === "read" && !isRead(it.id)) return false;
     if (ui.status === "later" && !isLater(it.id)) return false;
@@ -78,19 +151,24 @@
   function cardHTML(it) {
     const read = isRead(it.id), later = isLater(it.id);
     const authors = (it.authors || []).map((a) => {
-      const [last, first] = a.split(/,\s*/);
-      return first ? `${first} ${last}` : a;
+      const d = displayAuthor(a);
+      return `<button type="button" class="linkish" data-author="${esc(d)}" title="Voir les titres de ${esc(d)}">${esc(d)}</button>`;
     }).join(", ");
     const year = /^\d{4}/.test(it.year || "") ? it.year : "";
-    const pub = [it.pub, year && !String(it.pub).includes(year) ? year : ""].filter(Boolean).join(" · ");
+    let pub = esc([it.pub, year && !String(it.pub).includes(year) ? year : ""].filter(Boolean).join(" · "));
+    if (it.venue) {
+      const v = esc(it.venue);
+      const btn = `<button type="button" class="linkish" data-venue="${v}" title="Voir les titres de cette publication">${v}</button>`;
+      pub = pub.includes(v) ? pub.replace(v, btn) : `${btn}${pub ? " · " + pub : ""}`;
+    }
     return `<article class="card${read ? " is-read" : ""}" data-id="${esc(it.id)}">
       <div class="meta-top">
         <span class="badge">${esc(it.subtype)}</span>
         ${langGroup(it) === "other" ? `<span class="badge lang">${esc(it.langName)}</span>` : ""}
       </div>
       <h3 class="title"><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a></h3>
-      <p class="authors">${esc(authors)}</p>
-      ${pub ? `<p class="pub">${esc(pub)}</p>` : ""}
+      <p class="authors">${authors}</p>
+      ${pub ? `<p class="pub">${pub}</p>` : ""}
       ${it.abstract ? `<details class="abs"><summary>Résumé</summary><p>${esc(it.abstract)}</p></details>` : ""}
       <div class="actions">
         <button class="act later${later ? " on" : ""}" data-act="later" aria-pressed="${later}">${later ? "★ À lire" : "☆ Plus tard"}</button>
@@ -100,7 +178,9 @@
   }
 
   function render() {
+    buildIndexes();
     const c = cutoff();
+    $("#clearFilters").hidden = !(ui.author || ui.venue);
     // Compteurs d'onglets de langue (selon type, période, statut)
     $$(".lang-tabs button").forEach((b) => {
       const n = items.filter((it) => matches(it, { lang: b.dataset.lang }, c)).length;
@@ -125,11 +205,18 @@
       return;
     }
     if (!list.length) {
-      const any = items.some((it) => (!c || it.added >= c) && langGroup(it) === ui.lang && (ui.type === "all" || it.type === ui.type));
+      const any = items.some((it) => (!c || it.added >= c) && langGroup(it) === ui.lang && (ui.type === "all" || it.type === ui.type)
+        && (!ui.author || it._a.includes(norm(ui.author))) && (!ui.venue || it._v.includes(norm(ui.venue))));
       const msg = ui.status === "later" ? "Rien de mis de côté ici."
         : !any ? "Aucune nouveauté pour cette sélection."
         : ui.status === "unread" ? "Tout est lu pour cette sélection." : "Rien pour cette sélection.";
-      main.innerHTML = `<div class="empty"><strong>${msg}</strong>Essayez une autre langue, un autre type ou une période plus longue.</div>`;
+      // Indiquer où se trouvent les résultats ailleurs (autre langue / période plus longue).
+      const otherLangs = ["fr", "en", "other"].filter((l) => l !== ui.lang && items.some((it) => matches(it, { lang: l }, c)));
+      const names = { fr: "Français", en: "Anglais", other: "Autres langues" };
+      let hint = "Essayez une autre langue, un autre type ou une période plus longue.";
+      if (otherLangs.length) hint = `Résultats dans : ${otherLangs.map((l) => `<button type="button" class="linkish" data-goto-lang="${l}">${names[l]}</button>`).join(", ")}.`;
+      if (ui.period !== "365" && ui.status !== "later" && ui.status !== "read") hint += ` <button type="button" class="linkish" data-goto-period="365">Chercher sur 1 an</button>`;
+      main.innerHTML = `<div class="empty"><strong>${msg}</strong>${hint}</div>`;
       return;
     }
     let html = "", day = "", count = {};
@@ -293,17 +380,49 @@
     const b = e.target.closest("button"); if (!b) return;
     ui.type = b.dataset.type; shown = PAGE; saveUI(); render();
   });
-  $("#period").addEventListener("change", (e) => { ui.period = e.target.value; shown = PAGE; saveUI(); render(); });
-  $("#status").addEventListener("change", (e) => { ui.status = e.target.value; shown = PAGE; saveUI(); render(); });
+  const update = async () => { shown = PAGE; saveUI(); await ensureLoaded(); render(); };
+  $("#period").addEventListener("change", (e) => { ui.period = e.target.value; update(); });
+  $("#status").addEventListener("change", (e) => { ui.status = e.target.value; update(); });
+
+  // Filtres auteur / publication : suggestions pendant la saisie, filtrage après une courte pause.
+  for (const [id, key, listId] of [["author", "author", "authorList"], ["venue", "venue", "venueList"]]) {
+    const input = $("#" + id);
+    let typingTimer;
+    input.addEventListener("input", () => {
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => { ui[key] = input.value.trim(); shown = PAGE; saveUI(); render(); }, 250);
+      suggest($("#" + listId), key, input.value);
+    });
+    input.addEventListener("focus", () => suggest($("#" + listId), key, input.value));
+  }
+  /** Recopie les filtres dans les champs (seulement quand l'appli les change elle-même). */
+  function syncInputs() { $("#author").value = ui.author; $("#venue").value = ui.venue; }
+  syncInputs();
+  $("#clearFilters").addEventListener("click", () => { ui.author = ""; ui.venue = ""; syncInputs(); update(); });
+
+  /** Clic sur un auteur ou une revue dans une fiche : on filtre, et on élargit à 1 an pour tout voir. */
+  async function filterBy(key, value) {
+    ui[key] = value;
+    syncInputs();
+    if (ui.status === "unread" || ui.status === "all") ui.period = "365";
+    await update();
+    scrollTo({ top: 0, behavior: "smooth" });
+    toast(`Filtre : ${value} (sur 1 an)`);
+  }
+
   $("#list").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.id === "more") { shown += PAGE; render(); return; }
+    if (b.dataset.author) return filterBy("author", b.dataset.author);
+    if (b.dataset.venue) return filterBy("venue", b.dataset.venue);
+    if (b.dataset.gotoLang) { ui.lang = b.dataset.gotoLang; return update(); }
+    if (b.dataset.gotoPeriod) { ui.period = b.dataset.gotoPeriod; return update(); }
     if (b.dataset.act) onAction(b);
   });
   $("#syncBtn").addEventListener("click", () => sync({ manual: true }));
   $("#settingsBtn").addEventListener("click", openSettings);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") { loadItems().then(render); if (cfg()) sync(); }
+    if (document.visibilityState === "visible") { refresh(); if (cfg()) sync(); }
     else if (dirty && cfg()) sync();
   });
   addEventListener("online", () => cfg() && sync());
@@ -311,8 +430,5 @@
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
   // ---------- Démarrage ----------
-  loadItems().then(() => {
-    render();
-    if (cfg()) sync(); else setDot("off");
-  });
+  refresh().then(() => { if (cfg()) sync(); else setDot("off"); });
 })();
